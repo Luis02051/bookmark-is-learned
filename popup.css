@@ -1,0 +1,317 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 380px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #fff;
+  color: #0f1419;
+}
+
+.popup-container {
+  padding: 16px 18px;
+}
+
+.popup-title {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+/* ── Tab bar ──────────────────────────────────────────────────────────────── */
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid #eff3f4;
+  margin-bottom: 14px;
+}
+
+.tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #536471;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.tab-btn:hover {
+  color: #0f1419;
+}
+
+.tab-btn.active {
+  color: #1d9bf0;
+  border-bottom-color: #1d9bf0;
+}
+
+/* ── Tab panels ───────────────────────────────────────────────────────────── */
+
+.tab-panel {
+  display: none;
+}
+
+.tab-panel.active {
+  display: block;
+}
+
+/* ── Form (settings tab) ─────────────────────────────────────────────────── */
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 5px;
+  color: #536471;
+}
+
+.optional {
+  font-weight: 400;
+  color: #a0a8b0;
+}
+
+select,
+input[type='text'],
+input[type='password'] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1.5px solid #cfd9de;
+  border-radius: 8px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+  background: #fff;
+  color: #0f1419;
+}
+
+select:focus,
+input:focus {
+  border-color: #1d9bf0;
+}
+
+.input-wrapper {
+  position: relative;
+}
+
+.input-wrapper input {
+  padding-right: 36px;
+}
+
+.toggle-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 2px 4px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+
+.toggle-btn:hover {
+  opacity: 1;
+}
+
+.hint {
+  font-size: 11px;
+  color: #a0a8b0;
+  margin-top: 3px;
+}
+
+/* ── Save button ──────────────────────────────────────────────────────────── */
+
+.save-btn {
+  width: 100%;
+  padding: 9px;
+  background: #1d9bf0;
+  color: #fff;
+  border: none;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.save-btn:hover {
+  background: #1a8cd8;
+}
+
+.save-btn:active {
+  background: #1577b8;
+}
+
+/* ── Status message ───────────────────────────────────────────────────────── */
+
+.status {
+  text-align: center;
+  font-size: 12px;
+  margin-top: 8px;
+  min-height: 18px;
+}
+
+.status.success {
+  color: #00ba7c;
+}
+
+.status.error {
+  color: #f4212e;
+}
+
+/* ── History tab ──────────────────────────────────────────────────────────── */
+
+.history-list {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.history-list::-webkit-scrollbar {
+  width: 4px;
+}
+.history-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+}
+
+.history-empty {
+  text-align: center;
+  color: #a0a8b0;
+  font-size: 13px;
+  padding: 30px 0;
+}
+
+/* ── History item ─────────────────────────────────────────────────────────── */
+
+.history-item {
+  padding: 10px 0;
+  border-bottom: 1px solid #eff3f4;
+}
+
+.history-item:last-child {
+  border-bottom: none;
+}
+
+.history-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.history-author {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f1419;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.history-time {
+  font-size: 11px;
+  color: #a0a8b0;
+  flex-shrink: 0;
+}
+
+.history-preview {
+  font-size: 12px;
+  color: #536471;
+  line-height: 1.5;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── TLDR content (expandable) ────────────────────────────────────────────── */
+
+.history-tldr {
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  max-height: 500px;
+}
+
+.history-tldr.collapsed {
+  max-height: 0;
+}
+
+.history-tldr-text {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #0f1419;
+  padding: 8px 10px;
+  background: #f7f9f9;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── History actions row ──────────────────────────────────────────────────── */
+
+.history-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.history-link {
+  font-size: 11px;
+  color: #1d9bf0;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.history-link:hover {
+  text-decoration: underline;
+}
+
+.history-toggle {
+  font-size: 11px;
+  color: #1d9bf0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-weight: 500;
+}
+
+.history-toggle:hover {
+  text-decoration: underline;
+}
+
+/* ── Clear history button ─────────────────────────────────────────────────── */
+
+.clear-history-btn {
+  width: 100%;
+  padding: 8px;
+  margin-top: 10px;
+  background: none;
+  color: #f4212e;
+  border: 1.5px solid #f4212e;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.clear-history-btn:hover {
+  background: #f4212e;
+  color: #fff;
+}
