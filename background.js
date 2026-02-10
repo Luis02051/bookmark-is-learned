@@ -1,17 +1,26 @@
 // Background service worker
 // Handles TLDR generation: fetches full article / quoted-tweet content when
 // needed, then calls the user's chosen LLM API.
-// Also saves each successful TLDR to history (chrome.storage.local).
+// Also saves each successful TLDR to history and optionally downloads Markdown.
 
 const MAX_HISTORY = 200;
+
+// Allowed hostnames for background tab fetching (security whitelist)
+const ALLOWED_FETCH_HOSTS = ['x.com', 'twitter.com', 'mobile.twitter.com'];
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GENERATE_TLDR') {
     handleTLDRRequest(message.tweetData, message.articleUrl, message.quotedTweetUrl)
-      .then((result) => {
-        // Save to history and download markdown in the background (non-blocking)
+      .then(async (result) => {
+        // Save to history (non-blocking)
         saveToHistory(message.tweetData, result.tldr, result.isArticle);
-        saveMarkdownFile(message.tweetData, result.tldr, result.articleContent, result.quotedFullContent, result.isArticle);
+
+        // Download markdown only if user has enabled it
+        var prefs = await chrome.storage.sync.get({ autoDownloadMd: true });
+        if (prefs.autoDownloadMd) {
+          saveMarkdownFile(message.tweetData, result.tldr, result.articleContent, result.quotedFullContent, result.isArticle);
+        }
+
         sendResponse({ success: true, tldr: result.tldr });
       })
       .catch((error) => sendResponse({ success: false, error: error.message }));
@@ -160,17 +169,64 @@ async function saveMarkdownFile(tweetData, tldr, articleContent, quotedFullConte
   }
 }
 
+// ── API Key encryption (AES-GCM via Web Crypto API) ─────────────────────────
+
+async function getOrCreateEncryptionKey() {
+  var stored = await chrome.storage.local.get('encKey');
+  if (stored.encKey) {
+    return await crypto.subtle.importKey(
+      'raw', new Uint8Array(stored.encKey), 'AES-GCM', false, ['encrypt', 'decrypt']
+    );
+  }
+  // First run — generate a new 256-bit key, store raw bytes locally (never synced)
+  var key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+  var exported = await crypto.subtle.exportKey('raw', key);
+  await chrome.storage.local.set({ encKey: Array.from(new Uint8Array(exported)) });
+  return key;
+}
+
+async function decryptApiKey(encrypted) {
+  var key = await getOrCreateEncryptionKey();
+  var decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: new Uint8Array(encrypted.iv) },
+    key,
+    new Uint8Array(encrypted.data)
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+// ── URL whitelist for background tab fetching ────────────────────────────────
+
+function isAllowedFetchUrl(url) {
+  try {
+    var parsed = new URL(url);
+    return ALLOWED_FETCH_HOSTS.includes(parsed.hostname);
+  } catch (_) {
+    return false;
+  }
+}
+
 // ── Main handler ────────────────────────────────────────────────────────────────
 
 async function handleTLDRRequest(tweetData, articleUrl, quotedTweetUrl) {
   const settings = await chrome.storage.sync.get({
     provider: 'openai',
-    apiKey: '',
     language: 'zh-CN',
     model: '',
   });
 
-  if (!settings.apiKey) {
+  // Read encrypted API key from local storage
+  var localData = await chrome.storage.local.get('encryptedApiKey');
+  if (!localData.encryptedApiKey) {
+    throw new Error('请先在插件设置中填写 API Key');
+  }
+  var apiKey;
+  try {
+    apiKey = await decryptApiKey(localData.encryptedApiKey);
+  } catch (_) {
+    throw new Error('API Key 解密失败，请重新保存 API Key');
+  }
+  if (!apiKey) {
     throw new Error('请先在插件设置中填写 API Key');
   }
 
@@ -199,13 +255,13 @@ async function handleTLDRRequest(tweetData, articleUrl, quotedTweetUrl) {
   let tldr;
   switch (settings.provider) {
     case 'openai':
-      tldr = await callOpenAI(settings.apiKey, settings.model || 'gpt-4o-mini', prompt, maxTokens);
+      tldr = await callOpenAI(apiKey, settings.model || 'gpt-4o-mini', prompt, maxTokens);
       break;
     case 'claude':
-      tldr = await callClaude(settings.apiKey, settings.model || 'claude-sonnet-4-20250514', prompt, maxTokens);
+      tldr = await callClaude(apiKey, settings.model || 'claude-sonnet-4-20250514', prompt, maxTokens);
       break;
     case 'kimi':
-      tldr = await callKimi(settings.apiKey, settings.model || 'moonshot-v1-8k', prompt, maxTokens);
+      tldr = await callKimi(apiKey, settings.model || 'moonshot-v1-8k', prompt, maxTokens);
       break;
     default:
       throw new Error('不支持的模型: ' + settings.provider);
@@ -220,6 +276,9 @@ async function handleTLDRRequest(tweetData, articleUrl, quotedTweetUrl) {
 // injects extraction script, then closes the tab.
 
 async function fetchPageContent(pageUrl) {
+  // Only open tabs for trusted domains (x.com / twitter.com)
+  if (!isAllowedFetchUrl(pageUrl)) return null;
+
   let tabId = null;
   try {
     const tab = await chrome.tabs.create({ url: pageUrl, active: false });
@@ -463,7 +522,6 @@ async function callClaude(apiKey, model, prompt, maxTokens) {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
       model: model,

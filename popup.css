@@ -67,6 +67,29 @@ body {
   margin-bottom: 14px;
 }
 
+/* ── Checkbox toggle ──────────────────────────────────────────────────────── */
+
+.checkbox-group {
+  margin-bottom: 16px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0f1419;
+}
+
+.checkbox-label input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #1d9bf0;
+  cursor: pointer;
+}
+
 .form-group label {
   display: block;
   font-size: 12px;

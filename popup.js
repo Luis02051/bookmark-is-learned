@@ -1,4 +1,5 @@
 // Popup script – manages extension settings and browsing history
+// API key is encrypted via AES-GCM before storing in chrome.storage.local.
 // Uses safe DOM methods (createElement / textContent) throughout.
 
 const DEFAULT_MODELS = {
@@ -10,13 +11,88 @@ const DEFAULT_MODELS = {
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 document.addEventListener('DOMContentLoaded', () => {
-  loadSettings();
+  migrateAndLoadSettings();
   setupTabs();
   document.getElementById('provider').addEventListener('change', (e) => updateModelHint(e.target.value));
   document.getElementById('toggleKey').addEventListener('click', toggleKeyVisibility);
   document.getElementById('saveBtn').addEventListener('click', saveSettings);
   document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
 });
+
+// ── API Key encryption (AES-GCM via Web Crypto API) ─────────────────────────
+
+async function getOrCreateEncryptionKey() {
+  var stored = await chrome.storage.local.get('encKey');
+  if (stored.encKey) {
+    return await crypto.subtle.importKey(
+      'raw', new Uint8Array(stored.encKey), 'AES-GCM', false, ['encrypt', 'decrypt']
+    );
+  }
+  // First run — generate a new 256-bit key, store raw bytes locally (never synced)
+  var key = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+  var exported = await crypto.subtle.exportKey('raw', key);
+  await chrome.storage.local.set({ encKey: Array.from(new Uint8Array(exported)) });
+  return key;
+}
+
+async function encryptApiKey(plaintext) {
+  var key = await getOrCreateEncryptionKey();
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  var encoded = new TextEncoder().encode(plaintext);
+  var ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, encoded);
+  return { iv: Array.from(iv), data: Array.from(new Uint8Array(ciphertext)) };
+}
+
+async function decryptApiKey(encrypted) {
+  var key = await getOrCreateEncryptionKey();
+  var decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: new Uint8Array(encrypted.iv) },
+    key,
+    new Uint8Array(encrypted.data)
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+// ── Migration from plaintext sync storage ────────────────────────────────────
+// On first load after the security update, move any existing plaintext API key
+// from chrome.storage.sync → encrypted in chrome.storage.local, then delete it
+// from sync so it's no longer synced to Google.
+
+async function migrateAndLoadSettings() {
+  var syncData = await chrome.storage.sync.get({
+    provider: 'openai',
+    apiKey: '',
+    language: 'zh-CN',
+    model: '',
+    autoDownloadMd: true,
+  });
+
+  // If a plaintext key exists in sync, migrate it
+  if (syncData.apiKey) {
+    var encrypted = await encryptApiKey(syncData.apiKey);
+    await chrome.storage.local.set({ encryptedApiKey: encrypted });
+    // Remove plaintext key from sync storage
+    await chrome.storage.sync.remove('apiKey');
+  }
+
+  // Load the encrypted key for display
+  var apiKeyPlain = '';
+  var localData = await chrome.storage.local.get('encryptedApiKey');
+  if (localData.encryptedApiKey) {
+    try {
+      apiKeyPlain = await decryptApiKey(localData.encryptedApiKey);
+    } catch (_) {
+      // Decryption failed — key may be corrupted; user will re-enter
+    }
+  }
+
+  document.getElementById('provider').value = syncData.provider;
+  document.getElementById('apiKey').value = apiKeyPlain;
+  document.getElementById('language').value = syncData.language;
+  document.getElementById('model').value = syncData.model;
+  document.getElementById('autoDownloadMd').checked = syncData.autoDownloadMd;
+  updateModelHint(syncData.provider);
+}
 
 // ── Tab switching ─────────────────────────────────────────────────────────────
 
@@ -54,34 +130,24 @@ function toggleKeyVisibility() {
   input.type = input.type === 'password' ? 'text' : 'password';
 }
 
-async function loadSettings() {
-  const settings = await chrome.storage.sync.get({
-    provider: 'openai',
-    apiKey: '',
-    language: 'zh-CN',
-    model: '',
-  });
-
-  document.getElementById('provider').value = settings.provider;
-  document.getElementById('apiKey').value = settings.apiKey;
-  document.getElementById('language').value = settings.language;
-  document.getElementById('model').value = settings.model;
-  updateModelHint(settings.provider);
-}
-
 async function saveSettings() {
-  const apiKey = document.getElementById('apiKey').value.trim();
+  const apiKeyPlain = document.getElementById('apiKey').value.trim();
 
-  if (!apiKey) {
+  if (!apiKeyPlain) {
     showStatus('\u8BF7\u586B\u5199 API Key', 'error');
     return;
   }
 
+  // Encrypt API key and store in local storage (device-only)
+  var encrypted = await encryptApiKey(apiKeyPlain);
+  await chrome.storage.local.set({ encryptedApiKey: encrypted });
+
+  // Store non-sensitive settings in sync storage
   await chrome.storage.sync.set({
     provider: document.getElementById('provider').value,
-    apiKey,
     language: document.getElementById('language').value,
     model: document.getElementById('model').value.trim(),
+    autoDownloadMd: document.getElementById('autoDownloadMd').checked,
   });
 
   showStatus('\u8BBE\u7F6E\u5DF2\u4FDD\u5B58', 'success');
