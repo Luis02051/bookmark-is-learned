@@ -284,7 +284,8 @@ async function saveSettings() {
     const apiKeyPlain = document.getElementById('apiKey').value.trim();
     const baseUrlInput = document.getElementById('baseUrl').value.trim();
 
-    if (!apiKeyPlain) {
+    var mdMode = document.getElementById('mdMode').value;
+    if (!apiKeyPlain && mdMode !== 'original') {
       showStatus('\u8BF7\u586B\u5199 API Key', 'error');
       return;
     }
@@ -299,8 +300,10 @@ async function saveSettings() {
     }
 
     // Encrypt API key and store in local storage (device-only)
-    var encrypted = await encryptApiKey(apiKeyPlain);
-    await chrome.storage.local.set({ encryptedApiKey: encrypted });
+    if (apiKeyPlain) {
+      var encrypted = await encryptApiKey(apiKeyPlain);
+      await chrome.storage.local.set({ encryptedApiKey: encrypted });
+    }
 
     // Store non-sensitive settings in sync storage.
     // Note: mdFolderPath is saved separately by the folder picker (background.js).
