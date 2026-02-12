@@ -190,6 +190,41 @@ async function writeViaDownloads(markdown, fileName) {
   });
 }
 
+// Strip metadata prefix from article body that duplicates the markdown header.
+// X Article pages render title, author info, date, and engagement counts
+// before the actual content — these are already shown in the markdown header.
+function stripArticleMetadataPrefix(body, title, author) {
+  var lines = body.split('\n');
+  var cleanAuthor = (author || '').split('\n')[0].trim();
+  var cleanTitle = (title || '').trim();
+  var i = 0;
+  var maxScan = Math.min(lines.length, 25);
+
+  while (i < maxScan) {
+    var line = lines[i].trim();
+    if (!line) { i++; continue; }
+    // Skip article title (already shown as ### heading)
+    if (cleanTitle && line === cleanTitle) { i++; continue; }
+    // Skip author name (already in metadata block)
+    if (cleanAuthor && line === cleanAuthor) { i++; continue; }
+    // Skip @handle
+    if (/^@\w+$/.test(line)) { i++; continue; }
+    // Skip dot separators
+    if (line === '·') { i++; continue; }
+    // Skip date patterns (Chinese: X月X日, English: D Mon YYYY)
+    if (/^\d{1,2}月\d{1,2}日$/.test(line)) { i++; continue; }
+    if (/^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)/i.test(line)) { i++; continue; }
+    // Skip follow/edit button text
+    if (/^(Follow|回关|关注|Edited)$/i.test(line)) { i++; continue; }
+    // Skip engagement numbers (e.g. 27, 270, 31万, 302K)
+    if (/^[\d,.]+[万亿KkMm]?$/.test(line)) { i++; continue; }
+    // Non-metadata line — stop stripping
+    break;
+  }
+
+  return lines.slice(i).join('\n').trim();
+}
+
 // Build the markdown content string from tweet data and TLDR result
 function buildMarkdownContent(tweetData, tldr, articleContent, quotedFullContent, isArticle, mode) {
   var author = tweetData.author || 'unknown';
@@ -242,17 +277,19 @@ function buildMarkdownContent(tweetData, tldr, articleContent, quotedFullContent
     lines.push('');
 
     if (isArticle && articleContent) {
+      var cleanBody = stripArticleMetadataPrefix(articleContent.body, articleContent.title, author);
       if (articleContent.title) {
         lines.push('### ' + articleContent.title);
         lines.push('');
       }
-      lines.push(articleContent.body);
+      lines.push(cleanBody);
     } else if (tweetData.text) {
       lines.push(tweetData.text);
     } else if (tweetData.cardText) {
       lines.push(tweetData.cardText);
     } else if (tweetData.fallbackText) {
-      lines.push(tweetData.fallbackText);
+      // fallbackText from X Articles may also contain metadata prefix
+      lines.push(stripArticleMetadataPrefix(tweetData.fallbackText, '', author));
     }
     lines.push('');
 
