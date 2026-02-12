@@ -538,6 +538,15 @@ function ensureBaseUrlPermission(origin) {
 async function fetchPageContent(pageUrl) {
   if (!isAllowedFetchUrl(pageUrl)) return null;
 
+  // Extract the numeric ID from the URL (article ID or status ID) for
+  // verification inside the background tab.  X is a SPA with aggressive
+  // caching — the tab may briefly render stale content from a previous
+  // page before navigating to the requested URL.  We use the ID to confirm
+  // that the tab actually loaded the right page.
+  var idMatch = pageUrl.match(/\/(\d{10,})(?:\/|$)/);
+  var expectedId = idMatch ? idMatch[1] : '';
+  var isArticleUrl = /\/(articles?)\//i.test(pageUrl);
+
   let tabId = null;
   try {
     const tab = await chrome.tabs.create({ url: pageUrl, active: false });
@@ -549,6 +558,7 @@ async function fetchPageContent(pageUrl) {
     const results = await chrome.scripting.executeScript({
       target: { tabId },
       func: extractPageContent,
+      args: [expectedId, isArticleUrl],
     });
 
     await chrome.tabs.remove(tabId);
@@ -588,7 +598,7 @@ function waitForTabLoad(tabId, timeoutMs) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-function extractPageContent() {
+function extractPageContent(expectedId, isArticleUrl) {
   return new Promise((resolve) => {
     var attempts = 0;
     var maxAttempts = 16;
@@ -596,6 +606,20 @@ function extractPageContent() {
     var timer = setInterval(function () {
       attempts++;
 
+      // Guard: verify the tab actually loaded the expected page.
+      // X is a SPA with aggressive caching — the tab may briefly show
+      // stale content from a previous page before the router navigates
+      // to the requested URL.  If the URL doesn't contain the expected
+      // numeric ID, skip this poll cycle and wait for navigation.
+      if (expectedId && window.location.href.indexOf(expectedId) === -1) {
+        if (attempts < maxAttempts) return; // keep waiting
+        // Gave up — return null instead of grabbing wrong content
+        clearInterval(timer);
+        resolve(null);
+        return;
+      }
+
+      // 1. Article-specific selectors (highest confidence — exact testid match)
       var articleSelectors = [
         '[data-testid="noteBody"]',
         '[data-testid="richTextContainer"]',
@@ -615,52 +639,47 @@ function extractPageContent() {
         }
       }
 
-      // Thread detection: only combine tweets from the same author (thread),
-      // not random timeline/recommendation tweets that appear below.
-      // Each tweet is inside an <article data-testid="tweet">. We find the
-      // author of the first tweet and only include consecutive same-author tweets.
-      var articles = document.querySelectorAll('article[data-testid="tweet"]');
-      if (articles.length >= 1) {
-        var textParts = [];
-        var firstAuthor = null;
-        for (var j = 0; j < articles.length && textParts.length < 10; j++) {
-          var authorEl = articles[j].querySelector('[data-testid="User-Name"]');
-          var authorName = authorEl ? authorEl.innerText.split('\n')[0] : '';
-          if (j === 0) {
-            firstAuthor = authorName;
-          } else if (authorName !== firstAuthor) {
-            // Different author — stop collecting (end of thread)
-            break;
+      // 2. Thread detection — only for tweet/status URLs, NOT article URLs.
+      //    On article URLs, X may render cached/recommended tweets before the
+      //    article content loads.  Grabbing those tweets would return wrong content.
+      if (!isArticleUrl) {
+        var articles = document.querySelectorAll('article[data-testid="tweet"]');
+        if (articles.length >= 1) {
+          var textParts = [];
+          var firstAuthor = null;
+          for (var j = 0; j < articles.length && textParts.length < 10; j++) {
+            var authorEl = articles[j].querySelector('[data-testid="User-Name"]');
+            var authorName = authorEl ? authorEl.innerText.split('\n')[0] : '';
+            if (j === 0) {
+              firstAuthor = authorName;
+            } else if (authorName !== firstAuthor) {
+              break;
+            }
+            var tweetEl = articles[j].querySelector('[data-testid="tweetText"]');
+            if (tweetEl && tweetEl.innerText.trim()) {
+              textParts.push(tweetEl.innerText);
+            }
           }
-          var tweetEl = articles[j].querySelector('[data-testid="tweetText"]');
-          if (tweetEl && tweetEl.innerText.trim()) {
-            textParts.push(tweetEl.innerText);
+          var combined = textParts.join('\n\n');
+          if (combined.length > 50) {
+            clearInterval(timer);
+            resolve({ title: '', body: combined.slice(0, 15000) });
+            return;
           }
-        }
-        var combined = textParts.join('\n\n');
-        if (combined.length > 50) {
-          clearInterval(timer);
-          resolve({ title: '', body: combined.slice(0, 15000) });
-          return;
         }
       }
 
-      // X Article focus mode pages: article body is rendered as plain elements
-      // with h1/h2 section headings, no special data-testid markers.
-      // Detect by looking for multiple h1 headings inside main.
+      // 3. X Article focus mode: article body rendered as plain elements with
+      //    h1/h2 section headings, no special data-testid markers.
       var mainEl = document.querySelector('main');
       if (mainEl) {
         var h1List = mainEl.querySelectorAll('h1');
         if (h1List.length >= 2) {
-          // Multiple h1 headings = article sections. Find their common parent.
           var bodyContainer = h1List[0].parentElement;
           if (bodyContainer && bodyContainer.innerText.trim().length > 200) {
             clearInterval(timer);
-            // Remove noise elements from body (e.g. "Upgrade to Premium" banners)
             var statusEls = bodyContainer.querySelectorAll('[role="status"]');
             for (var s = 0; s < statusEls.length; s++) statusEls[s].remove();
-            // Look for article title: scan parent's children from the start,
-            // find the first single-line text that isn't author info (no @)
             var titleText = '';
             var parentEl = bodyContainer.parentElement;
             if (parentEl) {
@@ -685,9 +704,9 @@ function extractPageContent() {
         }
       }
 
+      // 4. Final fallback after all polls exhausted
       if (attempts >= maxAttempts) {
         clearInterval(timer);
-        // Prefer primaryColumn (center column only) over main (which includes sidebar)
         var contentArea = document.querySelector('[data-testid="primaryColumn"]') || mainEl;
         if (contentArea && contentArea.innerText.length > 200) {
           var heading = document.querySelector('h1');
