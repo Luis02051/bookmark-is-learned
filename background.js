@@ -156,14 +156,28 @@ async function writeViaNativeHost(markdown, fileName) {
 
 // Fallback: save via chrome.downloads to the Downloads/bookmark-is-learned/ subfolder.
 // Tracks actual download completion before logging success.
+//
+// Uses Blob URL instead of data URL because Windows Chrome ignores the
+// `filename` parameter for data: URL downloads, producing generic names
+// like "下载.txt" instead of the specified filename with .md extension.
 async function writeViaDownloads(markdown, fileName) {
   var fullPath = 'bookmark-is-learned/' + fileName;
-  // Use text/plain instead of text/markdown — Windows Chrome doesn't recognize
-  // text/markdown in the system MIME registry, which can cause the .md extension
-  // to be stripped from the downloaded file.
-  var dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(markdown);
+
+  // Prefer Blob URL — works in service workers since Chrome 116+ and
+  // ensures the filename parameter is respected on all platforms.
+  // Fall back to data URL for older Chrome versions.
+  var downloadUrl;
+  var blobUrl = null;
+  try {
+    var blob = new Blob([markdown], { type: 'text/plain' });
+    blobUrl = URL.createObjectURL(blob);
+    downloadUrl = blobUrl;
+  } catch (_) {
+    downloadUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(markdown);
+  }
+
   var downloadId = await chrome.downloads.download({
-    url: dataUrl,
+    url: downloadUrl,
     filename: fullPath,
     saveAs: false,
     conflictAction: 'uniquify',
@@ -171,16 +185,24 @@ async function writeViaDownloads(markdown, fileName) {
 
   // Wait for actual download completion before logging result
   return new Promise(function (resolve) {
+    function cleanupBlob() {
+      if (blobUrl) {
+        // Small delay so Chrome finishes reading the blob before we revoke it
+        setTimeout(function () { URL.revokeObjectURL(blobUrl); }, 5000);
+      }
+    }
     function onChanged(delta) {
       if (delta.id !== downloadId) return;
       if (delta.state && delta.state.current === 'complete') {
         chrome.downloads.onChanged.removeListener(onChanged);
+        cleanupBlob();
         chrome.storage.local.set({
           lastSave: { timestamp: Date.now(), success: true, path: 'Downloads/' + fullPath, method: 'downloads' },
         });
         resolve();
       } else if (delta.state && delta.state.current === 'interrupted') {
         chrome.downloads.onChanged.removeListener(onChanged);
+        cleanupBlob();
         chrome.storage.local.set({
           lastSave: { timestamp: Date.now(), success: false, error: 'download interrupted', method: 'downloads' },
         });
@@ -189,7 +211,7 @@ async function writeViaDownloads(markdown, fileName) {
     }
     chrome.downloads.onChanged.addListener(onChanged);
     // Safety timeout: resolve after 30s even if no state change fires
-    setTimeout(function () { chrome.downloads.onChanged.removeListener(onChanged); resolve(); }, 30000);
+    setTimeout(function () { chrome.downloads.onChanged.removeListener(onChanged); cleanupBlob(); resolve(); }, 30000);
   });
 }
 
