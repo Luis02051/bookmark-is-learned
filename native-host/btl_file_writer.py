@@ -14,7 +14,7 @@ Security:
   - Only writes within the user's home directory are allowed
 
 Protocol: Each message is a JSON object prefixed by a 4-byte uint32 LE length.
-The process runs a message loop (while True) to serve multiple requests per session.
+Chrome starts a new process per sendNativeMessage() call.
 """
 
 import json
@@ -176,28 +176,27 @@ def call_claude(system, user):
 
 
 def main():
-    while True:
-        msg = read_message()
-        if not msg:
-            break
+    msg = read_message()
+    if not msg:
+        return
 
-        action = msg.get('action', '')
+    action = msg.get('action', '')
 
-        if action == 'ping':
-            send_message({'success': True, 'version': '1.3.0'})
-        elif action == 'pick_folder':
-            send_message(pick_folder())
-        elif action == 'write_file':
-            p = msg.get('path', '')
-            c = msg.get('content', '')
-            if not p:
-                send_message({'success': False, 'error': 'missing path'})
-            else:
-                send_message(write_file(p, c))
-        elif action == 'call_claude':
-            send_message(call_claude(msg.get('system', ''), msg.get('user', '')))
+    if action == 'ping':
+        send_message({'success': True, 'version': '1.3.0'})
+    elif action == 'pick_folder':
+        send_message(pick_folder())
+    elif action == 'write_file':
+        p = msg.get('path', '')
+        c = msg.get('content', '')
+        if not p:
+            send_message({'success': False, 'error': 'missing path'})
         else:
-            send_message({'success': False, 'error': f'unknown action: {action}'})
+            send_message(write_file(p, c))
+    elif action == 'call_claude':
+        send_message(call_claude(msg.get('system', ''), msg.get('user', '')))
+    else:
+        send_message({'success': False, 'error': f'unknown action: {action}'})
 
 
 if __name__ == '__main__':
