@@ -29,7 +29,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // Download markdown only if user has enabled it
         var prefs = await chrome.storage.sync.get({ autoDownloadMd: true });
         if (prefs.autoDownloadMd) {
-          saveMarkdownFile(message.tweetData, result.tldr, result.articleContent, result.quotedFullContent, result.isArticle, result.mode);
+          var senderTabId = sender && sender.tab ? sender.tab.id : null;
+          saveMarkdownFile(message.tweetData, result.tldr, result.articleContent, result.quotedFullContent, result.isArticle, result.mode, senderTabId);
         }
 
         sendResponse({ success: true, tldr: result.tldr, mode: result.mode });
@@ -104,18 +105,25 @@ async function saveToHistory(tweetData, tldr, isArticle) {
 
 // ── Markdown file saving (native host + chrome.downloads fallback) ───────────
 
-async function saveMarkdownFile(tweetData, tldr, articleContent, quotedFullContent, isArticle, mode) {
+async function saveMarkdownFile(tweetData, tldr, articleContent, quotedFullContent, isArticle, mode, senderTabId) {
   try {
     var markdown = buildMarkdownContent(tweetData, tldr, articleContent, quotedFullContent, isArticle, mode);
     var fileName = buildFileName(tweetData, articleContent, isArticle);
 
-    // Try writing via native messaging host (supports any folder)
+    // 1. Primary: native messaging host (writes to any user-chosen folder)
     var written = await writeViaNativeHost(markdown, fileName);
+    if (written) return;
 
-    if (!written) {
-      // Fallback: save via chrome.downloads to the Downloads folder
-      await writeViaDownloads(markdown, fileName);
+    // 2. Fallback: content-script download via <a download> tag.
+    //    More reliable than chrome.downloads for filename handling on Windows,
+    //    where chrome.downloads ignores the filename parameter for data/blob URLs.
+    if (senderTabId) {
+      var csWritten = await writeViaContentScript(senderTabId, markdown, fileName);
+      if (csWritten) return;
     }
+
+    // 3. Last resort: chrome.downloads API (filename may be incorrect on Windows)
+    await writeViaDownloads(markdown, fileName);
   } catch (err) {
     console.log('[background] saveMarkdownFile error:', err.message);
     // Log save failure for debug info display in popup
@@ -154,7 +162,28 @@ async function writeViaNativeHost(markdown, fileName) {
   }
 }
 
-// Fallback: save via chrome.downloads to the Downloads/bookmark-is-learned/ subfolder.
+// Download via content script: send markdown to the active tab where it creates
+// a Blob and triggers download using an <a download="filename.md"> tag.
+// The HTML download attribute reliably sets filenames across all platforms,
+// unlike chrome.downloads which ignores the filename param on Windows.
+async function writeViaContentScript(tabId, markdown, fileName) {
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      type: 'SAVE_MARKDOWN',
+      markdown: markdown,
+      fileName: fileName,
+    });
+    chrome.storage.local.set({
+      lastSave: { timestamp: Date.now(), success: true, path: 'Downloads/' + fileName, method: 'content-script' },
+    });
+    return true;
+  } catch (err) {
+    console.log('[background] Content script download failed:', err.message);
+    return false;
+  }
+}
+
+// Last resort: save via chrome.downloads to the Downloads/bookmark-is-learned/ subfolder.
 // Tracks actual download completion before logging success.
 //
 // Uses Blob URL instead of data URL because Windows Chrome ignores the

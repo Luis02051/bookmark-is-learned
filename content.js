@@ -454,4 +454,26 @@
     }
     if (cursor < text.length) el.appendChild(document.createTextNode(text.slice(cursor)));
   }
+
+  // ── Markdown download via <a download> tag ────────────────────────────────
+  // Background sends markdown content here when native host is unavailable.
+  // The HTML download attribute reliably sets filenames on all platforms,
+  // unlike chrome.downloads which ignores the filename param on Windows.
+
+  chrome.runtime.onMessage.addListener(function (message) {
+    if (message.type === 'SAVE_MARKDOWN') {
+      var blob = new Blob([message.markdown], { type: 'text/markdown' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = message.fileName;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+        a.remove();
+      }, 1000);
+    }
+  });
 })();
