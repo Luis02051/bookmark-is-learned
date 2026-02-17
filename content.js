@@ -147,6 +147,7 @@
 
     const cardEl = article.querySelector('[data-testid="card.wrapper"]');
     const cardText = cardEl ? cardEl.innerText : '';
+    const referencedUrls = collectReferencedUrls(article, quotedTweet);
 
     let fallbackText = '';
     if (!text && !cardText) {
@@ -188,8 +189,53 @@
 
     return {
       text, author, quotedText, quotedAuthor, cardText, fallbackText,
-      tweetUrl, url: window.location.href, metrics,
+      tweetUrl, url: window.location.href, metrics, referencedUrls,
     };
+  }
+
+  // Collect external links referenced by the bookmarked post itself.
+  // This covers both inline links and "card preview" links.
+  function collectReferencedUrls(article, quotedTweet) {
+    const links = article.querySelectorAll('a[href]');
+    const seen = new Set();
+    const urls = [];
+
+    for (const link of links) {
+      if (quotedTweet && quotedTweet.contains(link)) continue;
+
+      const hrefRaw = link.getAttribute('href') || link.href || '';
+      const href = hrefRaw.startsWith('/') ? ('https://x.com' + hrefRaw) : hrefRaw;
+      if (!href) continue;
+
+      let parsed;
+      try {
+        parsed = new URL(href, window.location.origin);
+      } catch (_) {
+        continue;
+      }
+
+      const host = (parsed.hostname || '').toLowerCase();
+      const path = parsed.pathname || '';
+
+      // Ignore X internal navigation links that are not post references.
+      if (host === 'x.com' || host === 'twitter.com' || host === 'www.twitter.com') {
+        if (
+          /^\/[^/]+\/status\/\d+/.test(path)
+          || /^\/i\/(?:article|status|analytics)/.test(path)
+          || /\/(?:photo|video)\//.test(path)
+          || /^\/[^/]+$/.test(path)
+        ) {
+          continue;
+        }
+      }
+
+      const normalized = parsed.toString();
+      if (seen.has(normalized)) continue;
+      seen.add(normalized);
+      urls.push(normalized);
+    }
+
+    return urls;
   }
 
   // ── Engagement metrics extraction ──────────────────────────────────────────
