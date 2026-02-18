@@ -64,8 +64,8 @@
 | 模式 | 说明 |
 |------|------|
 | AI 开启 + TLDR 摘要模式 | 调用 AI 生成结构化摘要，Markdown 包含 TLDR + 原文（需要 API Key） |
-| AI 开启 + 原文模式 | 调用 AI 生成摘要，Markdown 包含 TLDR + 完整原文（需要 API Key） |
-| AI 关闭 | 不调用 AI，Markdown 仅保存元数据 + 完整原文（无需 API Key） |
+| AI 开启 + 原文模式 | 调用 AI 生成摘要，Markdown 包含 TLDR + 完整原文；若帖子含引用链接（含链接预览卡片），会在 `Referenced Links` 小节附上可点击链接（需要 API Key） |
+| AI 关闭 | 不调用 AI，Markdown 仅保存元数据 + 完整原文；若帖子含引用链接（含链接预览卡片），会在 `Referenced Links` 小节附上可点击链接（无需 API Key） |
 
 ## 支持的内容类型
 
@@ -104,6 +104,10 @@ AI 生成的结构化摘要（要点、流程、事实核查评分）
 ### Quoted Content (by 被引用作者)
 
 被引用/转发的完整内容（如有）
+
+### Referenced Links
+
+- [https://github.com/volcengine/OpenViking](https://github.com/volcengine/OpenViking)
 ```
 
 **原文模式：**
@@ -129,6 +133,10 @@ AI 生成的结构化摘要
 ### Quoted Content (by 被引用作者)
 
 被引用/转发的完整内容（如有）
+
+### Referenced Links
+
+- [https://github.com/volcengine/OpenViking](https://github.com/volcengine/OpenViking)
 ```
 
 **AI 关闭模式：**
@@ -148,6 +156,10 @@ AI 生成的结构化摘要
 ### Quoted Content (by 被引用作者)
 
 被引用/转发的完整内容（如有）
+
+### Referenced Links
+
+- [https://github.com/volcengine/OpenViking](https://github.com/volcengine/OpenViking)
 ```
 
 ## 工作原理
@@ -289,8 +301,8 @@ By default, files are saved to `Downloads/bookmark-is-learned/`. To use a custom
 | Mode | Description |
 |------|-------------|
 | AI On + TLDR Mode | Calls AI to generate structured summaries; Markdown includes TLDR + original text (requires API Key) |
-| AI On + Original Mode | Calls AI to generate summaries; Markdown includes TLDR + full original text (requires API Key) |
-| AI Off | Skips AI entirely; Markdown saves only metadata + full original text (no API Key required) |
+| AI On + Original Mode | Calls AI to generate summaries; Markdown includes TLDR + full original text. If the post contains referenced links (including link-preview cards), they are appended under `Referenced Links` as clickable URLs (requires API Key) |
+| AI Off | Skips AI entirely; Markdown saves only metadata + full original text. If the post contains referenced links (including link-preview cards), they are appended under `Referenced Links` as clickable URLs (no API Key required) |
 
 ## Supported Content Types
 
@@ -329,6 +341,10 @@ Full original text
 ### Quoted Content (by Quoted Author)
 
 Full quoted/retweeted content (if applicable)
+
+### Referenced Links
+
+- [https://github.com/volcengine/OpenViking](https://github.com/volcengine/OpenViking)
 ```
 
 **Original Mode:**
@@ -354,6 +370,10 @@ Full original text
 ### Quoted Content (by Quoted Author)
 
 Full quoted/retweeted content (if applicable)
+
+### Referenced Links
+
+- [https://github.com/volcengine/OpenViking](https://github.com/volcengine/OpenViking)
 ```
 
 **AI Off Mode:**
@@ -373,6 +393,10 @@ Full original text
 ### Quoted Content (by Quoted Author)
 
 Full quoted/retweeted content (if applicable)
+
+### Referenced Links
+
+- [https://github.com/volcengine/OpenViking](https://github.com/volcengine/OpenViking)
 ```
 
 ## How It Works

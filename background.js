@@ -368,6 +368,16 @@ function buildMarkdownContent(tweetData, tldr, articleContent, quotedFullContent
       lines.push(tweetData.cardText);
       lines.push('');
     }
+
+    if (tweetData.referencedUrls && tweetData.referencedUrls.length > 0) {
+      lines.push('### Referenced Links');
+      lines.push('');
+      for (var i = 0; i < tweetData.referencedUrls.length; i++) {
+        var linkUrl = tweetData.referencedUrls[i];
+        lines.push('- [' + linkUrl + '](' + linkUrl + ')');
+      }
+      lines.push('');
+    }
   }
 
   return lines.join('\n');
@@ -813,6 +823,12 @@ function buildPrompt(tweetData, articleContent, quotedFullContent, language, isA
     userContent = 'Post by ' + tweetData.author + ':\n' + tweetData.cardText;
   } else if (tweetData.fallbackText) {
     userContent = 'Content by ' + tweetData.author + ':\n' + tweetData.fallbackText;
+  }
+
+  if (tweetData.referencedUrls && tweetData.referencedUrls.length > 0) {
+    userContent += '\n\nReferenced links:\n' + tweetData.referencedUrls.map(function (u) {
+      return '- ' + u;
+    }).join('\n');
   }
 
   if (hasQuotedFull) {
