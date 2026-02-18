@@ -7,6 +7,7 @@ const DEFAULT_MODELS = {
   claude: 'claude-sonnet-4-20250514',
   kimi: 'moonshot-v1-8k',
   zhipu: 'glm-4-flash',
+  'local-claude': '（自动）',
 };
 
 // Theme cycle order: auto → light → dark → auto
@@ -18,7 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initTheme();
   migrateAndLoadSettings();
   setupTabs();
-  document.getElementById('provider').addEventListener('change', (e) => updateModelHint(e.target.value));
+  document.getElementById('provider').addEventListener('change', (e) => {
+    updateModelHint(e.target.value);
+    toggleLocalClaudeFields(e.target.value);
+  });
   document.getElementById('toggleKey').addEventListener('click', toggleKeyVisibility);
   document.getElementById('saveBtn').addEventListener('click', saveSettings);
   document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
@@ -147,6 +151,7 @@ async function migrateAndLoadSettings() {
   document.getElementById('autoDownloadMd').checked = syncData.autoDownloadMd;
   document.getElementById('aiEnabled').checked = syncData.aiEnabled !== false;
   updateModelHint(syncData.provider);
+  toggleLocalClaudeFields(syncData.provider);
   toggleSavePathVisibility();
   toggleAiFields();
 
@@ -210,6 +215,17 @@ function toggleAiFields() {
     if (mdModeGroup) mdModeGroup.style.display = 'none';
   }
   chrome.storage.sync.set({ aiEnabled: enabled });
+}
+
+// Show/hide API Key, Base URL, and local Claude hint based on selected provider
+function toggleLocalClaudeFields(provider) {
+  var isLocal = provider === 'local-claude';
+  var apiKeyGroup = document.getElementById('apiKey').closest('.form-group');
+  var baseUrlGroup = document.getElementById('baseUrl').closest('.form-group');
+  var localHint = document.getElementById('localClaudeHint');
+  if (apiKeyGroup) apiKeyGroup.style.display = isLocal ? 'none' : '';
+  if (baseUrlGroup) baseUrlGroup.style.display = isLocal ? 'none' : '';
+  if (localHint) localHint.style.display = isLocal ? 'block' : 'none';
 }
 
 // Update the hint text below the folder picker based on current state
@@ -307,7 +323,9 @@ async function saveSettings() {
 
     var mdMode = document.getElementById('mdMode').value;
     var aiEnabled = document.getElementById('aiEnabled').checked;
-    if (!apiKeyPlain && mdMode !== 'original' && aiEnabled) {
+    var selectedProvider = document.getElementById('provider').value;
+    var isLocalClaude = selectedProvider === 'local-claude';
+    if (!apiKeyPlain && mdMode !== 'original' && aiEnabled && !isLocalClaude) {
       showStatus('\u8BF7\u586B\u5199 API Key', 'error');
       return;
     }
@@ -615,15 +633,57 @@ function downloadInstallScript() {
     '    except Exception as e:',
     '        return {"success": False, "error": str(e)}',
     '',
+    'def find_claude():',
+    '    import shutil, glob',
+    '    p = shutil.which("claude")',
+    '    if p: return p',
+    '    home = os.path.expanduser("~")',
+    '    candidates = [',
+    '        "/usr/local/bin/claude", "/usr/bin/claude", "/opt/homebrew/bin/claude",',
+    '        f"{home}/.nvm/versions/node/*/bin/claude",',
+    '        f"{home}/.npm-global/bin/claude", f"{home}/.local/bin/claude",',
+    '    ]',
+    '    for pat in candidates:',
+    '        matches = glob.glob(pat)',
+    '        if matches: return sorted(matches)[-1]',
+    '    return None',
+    '',
+    'def build_env(claude_bin):',
+    '    env = os.environ.copy()',
+    '    env.pop("CLAUDECODE", None)',
+    '    claude_dir = os.path.dirname(claude_bin)',
+    '    existing = env.get("PATH", "")',
+    '    env["PATH"] = claude_dir + (":" + existing if existing else "")',
+    '    return env',
+    '',
+    'def call_claude(system, user):',
+    '    claude_bin = find_claude()',
+    '    if not claude_bin:',
+    '        return {"success": False, "error": "claude CLI not found. Install: npm install -g @anthropic-ai/claude-code"}',
+    '    prompt = (system + "\\n\\n" + user) if system else user',
+    '    try:',
+    '        r = subprocess.run(',
+    '            [claude_bin, "-p", prompt, "--output-format", "text", "--dangerously-skip-permissions"],',
+    '            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120, env=build_env(claude_bin))',
+    '        if r.returncode != 0:',
+    '            return {"success": False, "error": r.stderr.strip() or f"exit {r.returncode}"}',
+    '        return {"success": True, "text": r.stdout.strip()}',
+    '    except subprocess.TimeoutExpired:',
+    '        return {"success": False, "error": "timeout"}',
+    '    except Exception as e:',
+    '        return {"success": False, "error": str(e)}',
+    '',
     'def main():',
     '    m = read_msg()',
     '    if not m: return',
     '    a = m.get("action", "")',
-    '    if a == "ping": send_msg({"success": True, "version": "1.2.0"})',
+    '    if a == "ping": send_msg({"success": True, "version": "1.3.0"})',
     '    elif a == "pick_folder": send_msg(pick_folder())',
     '    elif a == "write_file":',
     '        p, c = m.get("path", ""), m.get("content", "")',
     '        send_msg(write_file(p, c) if p else {"success": False, "error": "no path"})',
+    '    elif a == "call_claude":',
+    '        send_msg(call_claude(m.get("system", ""), m.get("user", "")))',
     '    else: send_msg({"success": False, "error": f"unknown: {a}"})',
     '',
     'if __name__ == "__main__": main()',
@@ -686,7 +746,7 @@ function downloadInstallScript() {
   var dataUrl = 'data:text/plain;charset=utf-8,' + encodeURIComponent(script);
   chrome.downloads.download({
     url: dataUrl,
-    filename: 'install-btl-native.sh',
+    filename: 'install-btl-native.txt',
     saveAs: false,
     conflictAction: 'overwrite',
   });

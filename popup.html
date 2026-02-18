@@ -55,6 +55,7 @@
                 <option value="claude">Claude (Anthropic)</option>
                 <option value="kimi">Kimi (月之暗面)</option>
                 <option value="zhipu">智谱 (GLM)</option>
+                <option value="local-claude">本地 Claude (无需 API Key)</option>
               </select>
             </div>
             <div class="form-group">
@@ -92,6 +93,13 @@
             <label for="baseUrl">Base URL <span class="optional">(可选)</span></label>
             <input type="text" id="baseUrl" placeholder="例如 https://your-proxy.com/v1" />
             <div class="hint">留空使用官方 API 地址，填写后走自定义中转地址</div>
+          </div>
+
+          <div id="localClaudeHint" class="hint" style="display:none;">
+            使用本机 Claude CLI，无需 API Key。<br>
+            需安装 Claude Code：<code>npm install -g @anthropic-ai/claude-code</code><br>
+            安装后在终端运行 <code>claude</code> 完成登录认证。<br>
+            然后在下方「高级设置」中点击「一键下载安装脚本」完成配置。
           </div>
         </div>
 
@@ -138,7 +146,7 @@
               <button id="nativeSetupBtn" class="native-setup-btn" type="button">下载安装脚本</button>
               <div id="nativeSetupStep2" class="native-setup-step2" style="display:none;">
                 <p>在终端运行:</p>
-                <code class="install-cmd">bash ~/Downloads/install-btl-native.sh</code>
+                <code class="install-cmd">bash ~/Downloads/install-btl-native.txt</code>
                 <p>运行后重启浏览器，即可使用「选择文件夹」功能</p>
               </div>
             </div>

@@ -501,19 +501,21 @@ async function handleTLDRRequest(tweetData, articleUrl, quotedTweetUrl) {
 
   // Generate TLDR via LLM — both modes show it in the popup card,
   // and original mode also includes it in the saved markdown.
-  // Read encrypted API key from local storage
-  var localData = await chrome.storage.local.get('encryptedApiKey');
-  if (!localData.encryptedApiKey) {
-    throw new Error('请先在插件设置中填写 API Key');
-  }
+  // Read encrypted API key from local storage (skipped for local-claude provider)
   var apiKey;
-  try {
-    apiKey = await decryptApiKey(localData.encryptedApiKey);
-  } catch (_) {
-    throw new Error('API Key 解密失败，请重新保存 API Key');
-  }
-  if (!apiKey) {
-    throw new Error('请先在插件设置中填写 API Key');
+  if (settings.provider !== 'local-claude') {
+    var localData = await chrome.storage.local.get('encryptedApiKey');
+    if (!localData.encryptedApiKey) {
+      throw new Error('请先在插件设置中填写 API Key');
+    }
+    try {
+      apiKey = await decryptApiKey(localData.encryptedApiKey);
+    } catch (_) {
+      throw new Error('API Key 解密失败，请重新保存 API Key');
+    }
+    if (!apiKey) {
+      throw new Error('请先在插件设置中填写 API Key');
+    }
   }
 
   const hasQuotedFull = !!(quotedFullContent && quotedFullContent.body);
@@ -534,6 +536,9 @@ async function handleTLDRRequest(tweetData, articleUrl, quotedTweetUrl) {
       break;
     case 'zhipu':
       tldr = await callZhipu(apiKey, endpoint, settings.model || 'glm-4-flash', prompt, maxTokens);
+      break;
+    case 'local-claude':
+      tldr = await callLocalClaude(prompt, maxTokens);
       break;
     default:
       throw new Error('不支持的模型: ' + settings.provider);
@@ -981,4 +986,24 @@ async function callZhipu(apiKey, endpoint, model, prompt, maxTokens) {
     throw new Error('智谱 API returned unexpected response format');
   }
   return data.choices[0].message.content;
+}
+
+async function callLocalClaude(prompt) {
+  return new Promise(function (resolve, reject) {
+    chrome.runtime.sendNativeMessage('com.btl.file_writer', {
+      action: 'call_claude',
+      system: prompt.system,
+      user: prompt.user,
+    }, function (response) {
+      if (chrome.runtime.lastError) {
+        reject(new Error('本地 Claude 未安装，请先在「高级设置」中下载并运行安装脚本：' + chrome.runtime.lastError.message));
+        return;
+      }
+      if (!response || !response.success) {
+        reject(new Error(response && response.error ? response.error : '本地 Claude 调用失败'));
+        return;
+      }
+      resolve(response.text);
+    });
+  });
 }

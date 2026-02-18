@@ -2,10 +2,11 @@
 """
 Native messaging host for the "收藏到就是学到" Chrome extension.
 
-Handles three actions via Chrome's native messaging protocol:
+Handles four actions via Chrome's native messaging protocol:
   - ping:        Health check, returns version info
   - pick_folder: Open a native macOS folder picker dialog (via osascript)
   - write_file:  Write UTF-8 content to a specified file path
+  - call_claude: Invoke the local claude CLI and return generated text
 
 Security:
   - Paths containing '..' are rejected to prevent directory traversal
@@ -116,6 +117,64 @@ def write_file(file_path, content):
         return {'success': False, 'error': str(e)}
 
 
+def find_claude():
+    """Search for the claude binary in common locations (Chrome's PATH is minimal)."""
+    import shutil
+    import glob
+    p = shutil.which('claude')
+    if p:
+        return p
+    home = os.path.expanduser('~')
+    candidates = [
+        '/usr/local/bin/claude',
+        '/usr/bin/claude',
+        '/opt/homebrew/bin/claude',
+        f'{home}/.nvm/versions/node/*/bin/claude',
+        f'{home}/.npm-global/bin/claude',
+        f'{home}/.local/bin/claude',
+    ]
+    for pat in candidates:
+        matches = glob.glob(pat)
+        if matches:
+            return sorted(matches)[-1]
+    return None
+
+
+def build_env_with_node(claude_bin):
+    """Build an env dict with claude's directory on PATH and CLAUDECODE unset."""
+    env = os.environ.copy()
+    # Remove Claude Code's nesting-detection var so claude can run as a subprocess
+    env.pop('CLAUDECODE', None)
+    # Prepend claude's own directory so node (co-located in nvm setups) is found
+    claude_dir = os.path.dirname(claude_bin)
+    existing = env.get('PATH', '')
+    env['PATH'] = claude_dir + (':' + existing if existing else '')
+    return env
+
+
+def call_claude(system, user):
+    """Invoke the local claude CLI and return the response text."""
+    claude_bin = find_claude()
+    if not claude_bin:
+        return {'success': False, 'error': 'claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code'}
+    prompt = (system + '\n\n' + user) if system else user
+    try:
+        result = subprocess.run(
+            [claude_bin, '-p', prompt, '--output-format', 'text', '--dangerously-skip-permissions'],
+            stdin=subprocess.DEVNULL,
+            capture_output=True, text=True, timeout=120,
+            env=build_env_with_node(claude_bin),
+        )
+        if result.returncode != 0:
+            err = result.stderr.strip() or f'exit code {result.returncode}'
+            return {'success': False, 'error': err}
+        return {'success': True, 'text': result.stdout.strip()}
+    except subprocess.TimeoutExpired:
+        return {'success': False, 'error': 'timeout (120s)'}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
 def main():
     msg = read_message()
     if not msg:
@@ -124,7 +183,7 @@ def main():
     action = msg.get('action', '')
 
     if action == 'ping':
-        send_message({'success': True, 'version': '1.2.0'})
+        send_message({'success': True, 'version': '1.3.0'})
     elif action == 'pick_folder':
         send_message(pick_folder())
     elif action == 'write_file':
@@ -134,6 +193,8 @@ def main():
             send_message({'success': False, 'error': 'missing path'})
         else:
             send_message(write_file(p, c))
+    elif action == 'call_claude':
+        send_message(call_claude(msg.get('system', ''), msg.get('user', '')))
     else:
         send_message({'success': False, 'error': f'unknown action: {action}'})
 
